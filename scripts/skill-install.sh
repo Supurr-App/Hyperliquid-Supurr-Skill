@@ -63,11 +63,29 @@ install_skill() {
 
 # Targets: [dir, name]
 declare -a TARGETS=(
-  "$HOME/.claude/skills|Claude Code"
-  "$HOME/.codex/skills|OpenAI Codex"
-  "$HOME/.config/opencode/skill|OpenCode"
-  "$HOME/.cursor/skills|Cursor"
+  # Universal agents
+  "$HOME/.agents/skills|Universal Agents"
+  # Individual agents
   "$HOME/.agent/skills|Antigravity"
+  "$HOME/.amp/skills|Amp"
+  "$HOME/.augment/skills|Augment"
+  "$HOME/.claude/skills|Claude Code"
+  "$HOME/.cline/skills|Cline"
+  "$HOME/.codebuddy/skills|CodeBuddy"
+  "$HOME/.codex/skills|OpenAI Codex"
+  "$HOME/.commandcode/skills|Command Code"
+  "$HOME/.continue/skills|Continue"
+  "$HOME/.cursor/skills|Cursor"
+  "$HOME/.gemini-cli/skills|Gemini CLI"
+  "$HOME/.github-copilot/skills|GitHub Copilot"
+  "$HOME/.kimi-code-cli/skills|Kimi Code CLI"
+  "$HOME/.config/opencode/skill|OpenCode"
+  "$HOME/.openclaw/skills|OpenClaw"
+  "$HOME/.roo/skills|Roo"
+  "$HOME/.trae/skills|Trae"
+  "$HOME/.void/skills|Void"
+  "$HOME/.windsurf/skills|Windsurf"
+  "$HOME/.zed/skills|Zed"
 )
 
 print_banner
@@ -83,11 +101,18 @@ done
 if [ ${#FOUND[@]} -eq 0 ]; then
   error "No supported AI tools found."
   printf "\nSupported:\n"
+  printf "  • Antigravity (~/.agent)\n"
+  printf "  • Amp (~/.amp)\n"
   printf "  • Claude Code (~/.claude)\n"
+  printf "  • Cline (~/.cline)\n"
+  printf "  • Cursor (~/.cursor)\n"
+  printf "  • Gemini CLI (~/.gemini-cli)\n"
+  printf "  • GitHub Copilot (~/.github-copilot)\n"
   printf "  • OpenAI Codex (~/.codex)\n"
   printf "  • OpenCode (~/.config/opencode)\n"
-  printf "  • Cursor (~/.cursor)\n"
-  printf "  • Antigravity (~/.agent)\n"
+  printf "  • Windsurf (~/.windsurf)\n"
+  printf "  • Zed (~/.zed)\n"
+  printf "  • And more...\n"
   exit 1
 fi
 
