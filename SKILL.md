@@ -1,6 +1,6 @@
 ---
 name: supurr
-description: Backtest, deploy, and monitor grid trading bots on Hyperliquid. Supports Native Perps, Spot markets (USDC/USDH), and HIP-3 sub-DEXes.
+description: Backtest, deploy, and monitor trading bots on Hyperliquid. Supports Grid, DCA, and Spot-Perp Arbitrage strategies across Native Perps, Spot markets (USDC/USDH), and HIP-3 sub-DEXes.
 ---
 
 # Supurr CLI — Complete Command Reference
@@ -11,20 +11,22 @@ description: Backtest, deploy, and monitor grid trading bots on Hyperliquid. Sup
 
 ## Quick Reference
 
-| Command                | Purpose                      |
-| ---------------------- | ---------------------------- |
-| `supurr init`          | Setup wallet credentials     |
-| `supurr whoami`        | Show current wallet          |
-| `supurr new grid`      | Generate strategy config     |
-| `supurr configs`       | List saved configs           |
-| `supurr config <name>` | View config details          |
-| `supurr backtest`      | Run historical simulation    |
-| `supurr deploy`        | Deploy bot to production     |
-| `supurr monitor`       | View active bots             |
-| `supurr history`       | View historical bot sessions |
-| `supurr stop`          | Stop a running bot (signed)  |
-| `supurr prices`        | Debug price data             |
-| `supurr update`        | Update CLI to latest         |
+| Command                | Purpose                       |
+| ---------------------- | ----------------------------- |
+| `supurr init`          | Setup wallet credentials      |
+| `supurr whoami`        | Show current wallet           |
+| `supurr new grid`      | Generate grid strategy config |
+| `supurr new arb`       | Generate spot-perp arb config |
+| `supurr new dca`       | Generate DCA strategy config  |
+| `supurr configs`       | List saved configs            |
+| `supurr config <name>` | View config details           |
+| `supurr backtest`      | Run historical simulation     |
+| `supurr deploy`        | Deploy bot to production      |
+| `supurr monitor`       | View active bots              |
+| `supurr history`       | View historical bot sessions  |
+| `supurr stop`          | Stop a running bot (signed)   |
+| `supurr prices`        | Debug price data              |
+| `supurr update`        | Update CLI to latest          |
 
 ---
 
@@ -69,13 +71,19 @@ supurr whoami    # Shows: Address + masked key
 
 ## 3. `supurr new <strategy>` — Config Generator
 
-### Basic Syntax
+Supports three strategies: `grid`, `arb`, `dca`.
 
 ```bash
-supurr new grid [options]
+supurr new grid [options]   # Grid trading
+supurr new arb [options]    # Spot-perp arbitrage
+supurr new dca [options]    # Dollar-cost averaging
 ```
 
-### Market Types
+---
+
+### 3a. `supurr new grid` — Grid Strategy
+
+#### Market Types
 
 | Type     | Quote    | Requires  | Example                                 |
 | -------- | -------- | --------- | --------------------------------------- |
@@ -83,7 +91,7 @@ supurr new grid [options]
 | `spot`   | Variable | `--quote` | `--asset HYPE --type spot --quote USDC` |
 | `hip3`   | Per-DEX  | `--dex`   | `--asset BTC --type hip3 --dex hyna`    |
 
-### All Options
+#### Grid Options
 
 | Option                  | Default       | Description                                    |
 | ----------------------- | ------------- | ---------------------------------------------- |
@@ -100,7 +108,7 @@ supurr new grid [options]
 | `--leverage <n>`        | `2`           | Leverage (1 for spot)                          |
 | `--testnet`             | false         | Use Hyperliquid testnet                        |
 
-### Examples — All 4 Market Types
+#### Grid Examples
 
 ```bash
 # Native Perp (BTC-USDC)
@@ -116,7 +124,7 @@ supurr new grid --asset HYPE --type spot --quote USDH --levels 3 --start-price 2
 supurr new grid --asset BTC --type hip3 --dex hyna --levels 4 --start-price 88000 --end-price 92000 --investment 100 --leverage 20
 ```
 
-### HIP-3 DEXes
+#### HIP-3 DEXes
 
 | DEX    | Quote | Assets                              |
 | ------ | ----- | ----------------------------------- |
@@ -124,6 +132,114 @@ supurr new grid --asset BTC --type hip3 --dex hyna --levels 4 --start-price 8800
 | `xyz`  | USDE  | Stocks (AAPL, TSLA, etc.)           |
 | `km`   | USDT  | Kinetiq Markets                     |
 | `vntl` | USDE  | AI/tech tokens                      |
+
+---
+
+### 3b. `supurr new arb` — Spot-Perp Arbitrage Strategy
+
+Generates a config that simultaneously trades the **spot** and **perp** legs of the same asset, capturing spread differentials.
+
+> **Market Constraint**: Only assets that have **both** a spot token AND a perp market on Hyperliquid are eligible. The CLI auto-resolves the spot counterpart.
+
+#### Spot Resolution Logic
+
+Hyperliquid spot tokens for major assets use a `U`-prefix naming convention:
+
+| You pass `--asset` | CLI resolves spot token | Spot pair  | Perp pair  |
+| ------------------ | ----------------------- | ---------- | ---------- |
+| `BTC`              | `UBTC`                  | UBTC/USDC  | BTC perp   |
+| `ETH`              | `UETH`                  | UETH/USDC  | ETH perp   |
+| `SOL`              | `USOL`                  | USOL/USDC  | SOL perp   |
+| `ENA`              | `UENA`                  | UENA/USDC  | ENA perp   |
+| `WLD`              | `UWLD`                  | UWLD/USDC  | WLD perp   |
+| `MON`              | `UMON`                  | UMON/USDC  | MON perp   |
+| `MEGA`             | `UMEGA`                 | UMEGA/USDC | MEGA perp  |
+| `ZEC`              | `UZEC`                  | UZEC/USDC  | ZEC perp   |
+| `XPL`              | `UXPL`                  | UXPL/USDC  | XPL perp   |
+| `PUMP`             | `UPUMP`                 | UPUMP/USDC | PUMP perp  |
+| `HYPE`             | `HYPE` (exact name)     | HYPE/USDC  | HYPE perp  |
+| `TRUMP`            | `TRUMP` (exact name)    | TRUMP/USDC | TRUMP perp |
+| `PURR`             | `PURR` (exact name)     | PURR/USDC  | PURR perp  |
+| `BERA`             | `BERA` (exact name)     | BERA/USDC  | BERA perp  |
+
+Resolution order: try `U{ASSET}` first → fallback to exact name → fail if neither exists.
+
+> **⚠️ U-prefix Hazard**: Do NOT pass asset names that already start with `U` (e.g., `UNIT`). The CLI will prepend another `U` and look for `UUNIT`, which doesn't exist. Always use the **perp ticker name** (e.g., `BTC`, not `UBTC`).
+
+#### Arb Options
+
+| Option                 | Default            | Description                                  |
+| ---------------------- | ------------------ | -------------------------------------------- |
+| `-a, --asset <symbol>` | `BTC`              | Perp asset name (BTC, ETH, HYPE, etc.)       |
+| `--amount <usdc>`      | `100`              | Order amount in USDC per leg                 |
+| `--leverage <n>`       | `1`                | Leverage for perp leg                        |
+| `--open-spread <pct>`  | `0.003`            | Min opening spread (0.003 = 0.3%)            |
+| `--close-spread <pct>` | `-0.001`           | Min closing spread (-0.001 = -0.1%)          |
+| `--slippage <pct>`     | `0.001`            | Slippage buffer for both legs (0.001 = 0.1%) |
+| `-o, --output <file>`  | `{asset}-arb.json` | Output filename                              |
+| `--testnet`            | false              | Use Hyperliquid testnet                      |
+
+#### Arb Examples
+
+```bash
+# BTC spot-perp arb (default $100/leg)
+supurr new arb --asset BTC
+
+# HYPE arb with $50 per leg, 2x leverage on perp
+supurr new arb --asset HYPE --amount 50 --leverage 2
+
+# ETH arb with tighter spreads
+supurr new arb --asset ETH --open-spread 0.002 --close-spread -0.0005 --slippage 0.0005
+
+# SOL arb on testnet
+supurr new arb --asset SOL --testnet
+```
+
+> **Balance Requirement**: Arb bots require USDC balance in **both** Spot and Perps wallets on Hyperliquid, since the bot trades on both sides simultaneously.
+
+---
+
+### 3c. `supurr new dca` — DCA Strategy
+
+Generates a Dollar-Cost Averaging config that opens positions in steps when price deviates, then takes profit on the averaged entry.
+
+#### DCA Options
+
+| Option                       | Default       | Description                                        |
+| ---------------------------- | ------------- | -------------------------------------------------- |
+| `-a, --asset <symbol>`       | `BTC`         | Base asset                                         |
+| `--mode <mode>`              | `long`        | Direction: long or short                           |
+| `--type <type>`              | `native`      | Market type: native, spot, hip3                    |
+| `--trigger-price <price>`    | `100000`      | Price to trigger base order                        |
+| `--base-order <size>`        | `0.001`       | Base order size in base asset                      |
+| `--dca-order <size>`         | `0.001`       | DCA order size in base asset                       |
+| `--max-orders <n>`           | `5`           | Max number of DCA orders                           |
+| `--size-multiplier <x>`      | `2.0`         | Size multiplier per DCA step                       |
+| `--deviation <pct>`          | `0.01`        | Price deviation % to trigger first DCA (0.01 = 1%) |
+| `--deviation-multiplier <x>` | `1.0`         | Deviation multiplier for subsequent steps          |
+| `--take-profit <pct>`        | `0.02`        | Take profit % from avg entry (0.02 = 2%)           |
+| `--stop-loss <pnl>`          | —             | Optional stop loss as absolute PnL threshold       |
+| `--leverage <n>`             | `2`           | Leverage (1 for spot)                              |
+| `--restart`                  | false         | Restart cycle after take profit                    |
+| `--cooldown <secs>`          | `60`          | Cooldown between cycles in seconds                 |
+| `-o, --output <file>`        | `config.json` | Output filename                                    |
+| `--testnet`                  | false         | Use Hyperliquid testnet                            |
+
+#### DCA Examples
+
+```bash
+# BTC DCA long, trigger at $95k
+supurr new dca --asset BTC --trigger-price 95000
+
+# ETH DCA short with custom deviation
+supurr new dca --asset ETH --mode short --deviation 0.02
+
+# HYPE DCA with auto-restart
+supurr new dca --asset HYPE --restart --cooldown 120 --take-profit 0.03
+
+# DCA on spot market
+supurr new dca --asset HYPE --type spot --quote USDC --trigger-price 25
+```
 
 ---
 
@@ -284,7 +400,7 @@ supurr monitor -w 0x1234...    # Filter by wallet
 **Output Columns:**
 
 - **ID** — Bot identifier
-- **Type** — Strategy (grid, dca, mm)
+- **Type** — Strategy (grid, dca, mm, arb)
 - **Market** — Trading pair (BTC-USDC, HYPE-USDH)
 - **Position** — Size + direction (L=Long, S=Short)
 - **PnL** — Total profit/loss
@@ -306,7 +422,7 @@ supurr history -n 50       # Show last 50 bot sessions
 
 - **ID** — Bot identifier
 - **Market** — Trading pair (from `config.markets[0]`)
-- **Type** — Strategy (grid, dca, mm)
+- **Type** — Strategy (grid, dca, mm, arb)
 - **PnL** — Total profit/loss (realized + unrealized)
 - **Stop Reason** — Why the bot stopped (`shutdown:graceful` → "User stopped the bot Successfully")
 
@@ -357,7 +473,7 @@ supurr update    # Check and install latest version
 
 ## Complete Workflows
 
-### Workflow 1: Backtest → Deploy → Monitor
+### Workflow 1: Grid — Backtest → Deploy → Monitor
 
 ```bash
 # 1. Initialize (first time only)
@@ -379,7 +495,41 @@ supurr monitor --watch
 supurr stop --id <bot_id>
 ```
 
-### Workflow 2: Test All Market Types
+### Workflow 2: Arb — Setup → Deploy → Monitor
+
+```bash
+# 1. Initialize
+supurr init --address 0x... --api-wallet 0x...
+
+# 2. Generate arb config (auto-resolves spot counterpart)
+supurr new arb --asset BTC --amount 200 --leverage 1 --output btc-arb.json
+
+# 3. Review the generated config
+supurr config btc-arb
+
+# 4. Ensure USDC balance in BOTH Spot and Perps wallets on Hyperliquid
+
+# 5. Deploy
+supurr deploy -c btc-arb.json
+
+# 6. Monitor
+supurr monitor --watch
+```
+
+### Workflow 3: DCA — Configure → Deploy
+
+```bash
+# 1. Create DCA config
+supurr new dca --asset BTC --trigger-price 95000 --base-order 0.001 --max-orders 5 --take-profit 0.02 --output btc-dca.json
+
+# 2. Deploy
+supurr deploy -c btc-dca.json
+
+# 3. Monitor
+supurr monitor --watch
+```
+
+### Workflow 4: Test All Market Types
 
 ```bash
 # Native Perp
@@ -433,13 +583,15 @@ supurr backtest -c hyna-btc.json -s 2026-01-28 -e 2026-02-01
 
 ## Troubleshooting
 
-| Issue                  | Solution                                       |
-| ---------------------- | ---------------------------------------------- |
-| "Config not found"     | Use `supurr configs` to list available configs |
-| "No credentials"       | Run `supurr init` first                        |
-| "0 prices fetched"     | Check date range (data from 2026-01-28+)       |
-| "API wallet not valid" | Register API wallet on Hyperliquid first       |
-| HIP-3 backtest fails   | Use format `--dex hyna --asset BTC`            |
+| Issue                     | Solution                                                         |
+| ------------------------- | ---------------------------------------------------------------- |
+| "Config not found"        | Use `supurr configs` to list available configs                   |
+| "No credentials"          | Run `supurr init` first                                          |
+| "0 prices fetched"        | Check date range (data from 2026-01-28+)                         |
+| "API wallet not valid"    | Register API wallet on Hyperliquid first                         |
+| HIP-3 backtest fails      | Use format `--dex hyna --asset BTC`                              |
+| "No spot market found"    | Asset has no spot counterpart — arb not available for this asset |
+| Arb asset starts with `U` | Use the perp name (e.g., `BTC` not `UBTC`) — CLI adds `U` prefix |
 
 ---
 
