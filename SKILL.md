@@ -23,6 +23,8 @@ description: Backtest, deploy, and monitor trading bots on Hyperliquid. Supports
 | `supurr backtest`      | Run historical simulation     |
 | `supurr deploy`        | Deploy bot to production      |
 | `supurr monitor`       | View active bots              |
+| `supurr inspect <id>`  | Deep dive into a specific bot |
+| `supurr account`       | Hyperliquid account dashboard |
 | `supurr history`       | View historical bot sessions  |
 | `supurr stop`          | Stop a running bot (signed)   |
 | `supurr prices`        | Debug price data              |
@@ -77,6 +79,26 @@ Supports three strategies: `grid`, `arb`, `dca`.
 supurr new grid [options]   # Grid trading
 supurr new arb [options]    # Spot-perp arbitrage
 supurr new dca [options]    # Dollar-cost averaging
+```
+
+### Unified Asset Format
+
+The `--asset` flag supports a **unified format** that auto-detects the market type from delimiters:
+
+| Format      | Delimiter   | Type              | Example             |
+| ----------- | ----------- | ----------------- | ------------------- |
+| `BTC`       | none        | Perp              | `--asset BTC`       |
+| `ETH-USDC`  | `-` (dash)  | Perp (with quote) | `--asset ETH-USDC`  |
+| `HYPE/USDC` | `/` (slash) | Spot              | `--asset HYPE/USDC` |
+| `HYPE/USDH` | `/` (slash) | Spot (non-USDC)   | `--asset HYPE/USDH` |
+| `hyna:BTC`  | `:` (colon) | HIP-3             | `--asset hyna:BTC`  |
+
+> The old flags (`--type`, `--quote`, `--dex`) **still work** and override the unified format when both are provided.
+
+```bash
+# These produce identical configs:
+supurr new grid --asset HYPE/USDC
+supurr new grid --asset HYPE --type spot --quote USDC
 ```
 
 ---
@@ -378,7 +400,7 @@ supurr deploy -c config.json -s HL:0x804e57d7baeca937d4b30d3cbe017f8d73c21f1b
 
 ## 8. `supurr monitor` — View User's Bots
 
-> **Updated in v0.2.8**: Now shows only the user's bots by default (requires `supurr init`). Use `--history` to include stopped bots.
+> **Updated in v0.3.0**: Now shows only the user's bots by default (requires `supurr init`). Use `--history` to include stopped bots.
 
 ### Syntax
 
@@ -436,6 +458,122 @@ ID   Type  Market       Position  PnL
 ```
 
 ---
+
+## 8b. `supurr inspect <bot_id>` — Per-Bot Deep Dive
+
+Fetches bot metadata from the Bot API and enriches with live Hyperliquid data (position, orders, fills).
+
+### Syntax
+
+```bash
+supurr inspect <bot_id> [options]
+```
+
+### Options
+
+| Option        | Description                     |
+| ------------- | ------------------------------- |
+| `<bot_id>`    | **Required.** Bot ID to inspect |
+| `-w, --watch` | Live refresh every 3 seconds    |
+
+### Examples
+
+```bash
+supurr inspect 302            # Detailed view of bot 302
+supurr inspect 302 --watch    # Live refresh (Ctrl+C to exit)
+```
+
+### Output Sections
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  🤖 Bot #302  │  arb  │  UETH/USDC  │  Running (2h 14m)       ║
+╚══════════════════════════════════════════════════════════════════╝
+
+📊 Position — direction, size, entry/mark price, leverage, liq price
+💰 PnL Breakdown — realized, unrealized, funding, total
+📋 Active Orders — all resting orders for this bot's market
+📜 Recent Fills — last trades with time, side, price, size, fee
+⚙️ Config Snapshot — strategy params, spreads, investment
+📊 Visualize — clickable trade.supurr.app link
+```
+
+### Data Sources
+
+| Section            | Source  | Endpoint                              |
+| ------------------ | ------- | ------------------------------------- |
+| Bot metadata & PnL | Bot API | `user_bots/{address}` → filter by ID  |
+| Position details   | HL Info | `clearinghouseState` → filter by coin |
+| Active orders      | HL Info | `frontendOpenOrders` → filter by coin |
+| Recent fills       | HL Info | `userFills` → filter by coin          |
+| Config             | Bot API | Included in bot response              |
+
+> **Sub-account awareness**: The bot's config stores the actual trading address. Inspect auto-uses this for HL queries.
+
+---
+
+## 8c. `supurr account` — Hyperliquid Account Dashboard
+
+Displays perp margin, spot balances, positions, and optionally open orders, fills, and order history — all sourced directly from the Hyperliquid Info API.
+
+### Syntax
+
+```bash
+supurr account [options]
+```
+
+### Options
+
+| Option      | Description             |
+| ----------- | ----------------------- |
+| `--orders`  | Also show open orders   |
+| `--fills`   | Also show recent fills  |
+| `--history` | Also show order history |
+
+### Examples
+
+```bash
+supurr account                     # Overview: margin + positions + spot
+supurr account --orders            # Also show open orders
+supurr account --fills             # Also show recent fills
+supurr account --orders --fills    # Show orders and fills
+supurr account --history           # Show order history
+```
+
+### Default Output
+
+```
+╔══════════════════════════════════════════════════════╗
+║  💰 Account: 0x1234...abcd                           ║
+╚══════════════════════════════════════════════════════╝
+
+🏦 Perp Margin
+  Account Value: 12,450.00 USDC
+  Total Margin:   3,200.00 USDC
+  Available:      9,250.00 USDC
+
+📈 Positions (2)
+  Asset   │ Side  │ Size     │ Entry    │ Mark     │ UPnL
+  BTC     │ LONG  │ 0.0100   │ 97500.0  │ 98200.0  │ +7.00
+  ETH     │ SHORT │ 0.5000   │ 3100.0   │ 3085.0   │ +7.50
+
+💎 Spot Balances
+  Token   │ Balance      │ Value (USD)
+  USDC    │ 5,000.00     │ 5,000.00
+  HYPE    │ 120.50       │ 2,410.00
+```
+
+### Data Source
+
+All data comes directly from Hyperliquid Info API — no backend dependency:
+
+| Feature                 | HL Endpoint              |
+| ----------------------- | ------------------------ |
+| Perp margin & positions | `clearinghouseState`     |
+| Spot balances           | `spotClearinghouseState` |
+| Open orders             | `frontendOpenOrders`     |
+| Recent fills            | `userFills`              |
+| Order history           | `historicalOrders`       |
 
 ## 9. `supurr history` — View Bot History
 
@@ -598,6 +736,31 @@ supurr backtest -c hyna-btc.json -s 2026-01-28 -e 2026-02-01
 
 ---
 
+## Instrument Meta — Tick & Lot Size Formulas
+
+The CLI auto-computes `instrument_meta` from Hyperliquid's `szDecimals` (quantity precision). These are the **verified** formulas matching HL docs:
+
+| Market Type | `tick_decimals` formula  | `MAX_DECIMALS` | Example (BTC, szDec=5)     | Example (HYPE spot, szDec=2)    |
+| ----------- | ------------------------ | -------------- | -------------------------- | ------------------------------- |
+| **Perp**    | `max(6 - szDecimals, 0)` | 6              | `tick_size: "0.1"` (1 dec) | —                               |
+| **HIP-3**   | `max(6 - szDecimals, 0)` | 6              | `tick_size: "0.1"` (1 dec) | —                               |
+| **Spot**    | `max(8 - szDecimals, 0)` | 8              | —                          | `tick_size: "0.000001"` (6 dec) |
+
+**Derivations:**
+
+```
+tick_decimals = max(MAX_DECIMALS - szDecimals, 0)
+tick_size     = 10^(-tick_decimals)     # e.g., 10^(-1) = 0.1
+lot_size      = 10^(-szDecimals)         # e.g., 10^(-5) = 0.00001
+min_qty       = lot_size
+min_notional  = "10"                     # fixed for all markets
+```
+
+> [!CAUTION]
+> Spot uses `MAX_DECIMALS = 8`, not 6. Using the wrong constant will cause order rejections on low-priced spot tokens (e.g., KNTQ where szDecimals=0 → tick_decimals should be 8, not 6).
+
+---
+
 ## API Endpoints Used
 
 | Purpose       | Endpoint                                      | Auth              |
@@ -690,12 +853,14 @@ const dexes = await query({ type: "perpDexs" });
 
 ## Common Hazards
 
-| Issue                   | Solution                                          |
-| ----------------------- | ------------------------------------------------- |
-| `szDecimals` truncation | Truncate qty to `szDecimals` before submit        |
-| HIP-3 price prefix      | Sub-DEX prices keyed as `hyna:BTC`, not `BTC`     |
-| Sub-DEX asset index     | Use local index from DEX's `universe`, not global |
-| Fill limits             | `userFills` max 2000 — paginate with time ranges  |
+| Issue                   | Solution                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `szDecimals` truncation | **Truncate** (floor) qty to `szDecimals` before submit — never round up           |
+| Spot tick_size ≠ perp   | Spot uses `MAX_DECIMALS=8`, perp/HIP-3 uses `6` — don't mix formulas              |
+| HIP-3 price prefix      | Sub-DEX prices keyed as `hyna:BTC`, not `BTC`                                     |
+| Sub-DEX asset index     | Use local index from DEX's `universe`, not global                                 |
+| Fill limits             | `userFills` max 2000 — paginate with time ranges                                  |
+| Slider/input precision  | Always floor (truncate) trade sizes, never round — rounding up can exceed balance |
 
 ---
 
