@@ -1,9 +1,9 @@
 ---
-name: supurr
-description: Backtest, deploy, and monitor trading bots on Hyperliquid. Supports Grid, DCA, and Spot-Perp Arbitrage strategies across Native Perps, Spot markets (USDC/USDH), and HIP-3 sub-DEXes.
+name: hyperliquid-supurr
+description: Build, backtest, deploy, and monitor trading bots on Hyperliquid. Author custom strategies in Rust, or use built-in Grid, DCA, and Spot-Perp Arbitrage strategies across Native Perps, Spot markets (USDC/USDH), and HIP-3 sub-DEXes.
 ---
 
-# Supurr CLI — Complete Command Reference
+# Hyperliquid Supurr Skill — Complete Command Reference
 
 > **For LLMs**: This is the authoritative reference. Use exact syntax. Config files are in `~/.supurr/configs/`.
 
@@ -345,15 +345,7 @@ supurr deploy -c config.json -s HL:0x804e57d7baeca937d4b30d3cbe017f8d73c21f1b
   Market:       BTC-USDC
 ```
 
-### Gotchas
-
-| Issue                        | Solution                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `HL:` prefix in address      | Auto-stripped — safe to paste from Hyperliquid explorer                    |
-| "Subaccount not owned"       | Ensure the subaccount's `master` matches your `supurr whoami` address      |
-| "Vault not found"            | Check the vault address exists on the correct network (mainnet vs testnet) |
-| "Vault leader mismatch"      | Only the vault leader can deploy — check `vaultDetails` API                |
-| `subAccounts` returns `null` | Normal — means no subaccounts exist for that address                       |
+> **Gotchas**: `HL:` prefix is auto-stripped from addresses. Subaccount requires `master` to match your `supurr whoami` address. Only the vault leader can deploy.
 
 ---
 
@@ -396,25 +388,7 @@ supurr monitor -w 0x1234...    # Filter by wallet
   - **Perp**: `BTC-USDC` (hyphen separator)
   - **HIP-3**: `vntl:ANTHROPIC` (dex:base format)
 
-**Output Columns:**
-
-- **ID** — Bot identifier
-- **Type** — Strategy (grid, dca, mm, arb)
-- **Market** — Trading pair (BTC-USDC, HYPE-USDH)
-- **Position** — Size + direction (L=Long, S=Short)
-- **PnL** — Total profit/loss
-
-**Example Output:**
-
-```
-🤖 Active Bots  │  User: 0x0ecba...  │  Sync delay: 0s
-
-ID   Type  Market       Position  PnL
-299  grid  KNTQ-USDH    0.5 L     +12.34
-300  arb   BTC-USDC     -         +5.67
-
-📊 Visualize: https://trade.supurr.app/trade/KNTQ_USDH?user_address=0x0ecba...
-```
+**Output Columns:** ID, Type, Market, Position (size+direction), PnL. Includes a clickable trading visualization link.
 
 ---
 
@@ -429,13 +403,7 @@ supurr history -n 50       # Show last 50 bot sessions
 | --------------------- | ------- | ---------------------- |
 | `-n, --limit <count>` | `20`    | Number of bots to show |
 
-**Output Columns:**
-
-- **ID** — Bot identifier
-- **Market** — Trading pair (from `config.markets[0]`)
-- **Type** — Strategy (grid, dca, mm, arb)
-- **PnL** — Total profit/loss (realized + unrealized)
-- **Stop Reason** — Why the bot stopped (`shutdown:graceful` → "User stopped the bot Successfully")
+**Output Columns:** ID, Market, Type, PnL, Stop Reason.
 
 ---
 
@@ -482,49 +450,17 @@ supurr update    # Check and install latest version
 
 ---
 
-## Complete Workflows
+## More Info
 
-See → [references/workflows.md](references/workflows.md)
-
----
-
-## Config Storage
-
-```
-~/.supurr/
-├── credentials.json      # { address, private_key }
-├── configs/              # Saved bot configs
-│   ├── btc-grid.json
-│   ├── hype-usdc.json
-│   └── ...
-└── cache/                # Price data cache
-    └── hyperliquid/
-        ├── BTC/
-        └── HYPE/
-```
-
----
-
-## API Endpoints Used
-
-| Purpose       | Endpoint                                      | Auth              |
-| ------------- | --------------------------------------------- | ----------------- |
-| Bot Deploy    | `POST /bots/create/<wallet>`                  | —                 |
-| Active Bots   | `GET /dashboard/active_bots`                  | —                 |
-| Bot History   | `GET /dashboard/user_bots/<address>` (Python) | —                 |
-| Stop Bot      | `POST /bots/<bot_id>/stop` (Node)             | EIP-191 signature |
-| Price Data    | `GET /prices?dex=X&asset=Y&start_time=Z`      | —                 |
-| Price Archive | `GET /{dex}/{asset}/{date}.json`              | —                 |
-
----
-
-## Troubleshooting
-
-See → [references/troubleshooting.md](references/troubleshooting.md)
+- **Workflows**: See → [references/workflows.md](references/workflows.md)
+- **Config storage**: `~/.supurr/` contains `credentials.json`, `configs/`, and `cache/`
+- **Troubleshooting**: See → [references/troubleshooting.md](references/troubleshooting.md)
 
 ---
 
 # References
+
+## CLI & Exchange References
 
 | Reference                                                | Contents                                               |
 | -------------------------------------------------------- | ------------------------------------------------------ |
@@ -533,8 +469,26 @@ See → [references/troubleshooting.md](references/troubleshooting.md)
 | [Troubleshooting](references/troubleshooting.md)         | Common errors and fixes                                |
 | [Complete Workflows](references/workflows.md)            | End-to-end Grid, Arb, DCA, HIP-3 workflows             |
 
+## Strategy Authoring References
+
+> **For LLMs**: To build a custom trading strategy, read [STRATEGY_API.md](STRATEGY_API.md) first — it has the full contract, 3-file pattern, and E2E build instructions. Then use the API references below for exact signatures. Copy `templates/strategy-template/` and study `examples/strategy-simple/`.
+
+| Reference                                                | Contents                                                                                        |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [Strategy Authoring API](STRATEGY_API.md)                | **START HERE** — Architecture, Strategy trait, StrategyContext, 3-file pattern, E2E build guide |
+| [Strategy Trait & Context](references/strategy-trait.md) | `Strategy` trait + `StrategyContext` method signatures (commands, timers, read-only state)      |
+| [Command Structs](references/commands.md)                | `PlaceOrder`, `CancelOrder`, `CancelAll`, `StopStrategy` — constructors + builders              |
+| [Event Enum](references/events.md)                       | All events: `Quote`, `OrderFilled`, `OrderCompleted`, `OrderCanceled`, `OrderRejected`, etc.    |
+| [Core Types](references/types.md)                        | All types: `Price`, `Qty`, `Market`, `Position`, `Balance`, `InstrumentMeta`, `LiveOrder`, etc. |
+| [Strategy Template](templates/strategy-template/)        | Scaffold crate with TODO markers — copy to start a new strategy                                 |
+| [Simple Strategy Example](examples/strategy-simple/)     | Complete working buy-low-sell-high strategy (~140 lines)                                        |
+| [Custom Strategy Tutorial](tutorials/custom-strategy.md) | End-to-end walkthrough: scaffold → implement → register → build → run                           |
+
+---
+
 ## Tutorials
 
 - [Grid Bot Tutorial](tutorials/grid.md) — Range trading with buy/sell grids
 - [Arb Bot Tutorial](tutorials/arb.md) — Market-neutral spot-perp arbitrage
 - [DCA Bot Tutorial](tutorials/dca.md) — Dollar-cost averaging with auto-restart
+- [Build Your Own Strategy](tutorials/custom-strategy.md) — Custom strategy from scratch
