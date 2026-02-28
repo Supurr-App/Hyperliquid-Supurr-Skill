@@ -7,7 +7,7 @@
 ### Option 1: skills.sh (Recommended)
 
 ```bash
-npx skills add Supurr-App/supurr-skill
+npx skills add Supurr-App/Hyperliquid-Supurr-Skill
 ```
 
 Supports Claude Code, Cursor, OpenCode, Antigravity, and more.
