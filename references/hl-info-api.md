@@ -33,14 +33,16 @@ Use `POST .../info` with `Content-Type: application/json`.
 
 | Query           | Request Body                                                                   |
 | --------------- | ------------------------------------------------------------------------------ |
-| Perp Positions  | `{"type": "clearinghouseState", "user": "0x..."}`                              |
+| Perp Positions  | `{"type": "clearinghouseState", "user": "0x...", "dex": "ALL_DEXS"}`          |
 | Spot Balances   | `{"type": "spotClearinghouseState", "user": "0x..."}`                          |
-| Open Orders     | `{"type": "openOrders", "user": "0x..."}`                                      |
+| Open Orders     | `{"type": "openOrders", "user": "0x...", "dex": "ALL_DEXS"}`                  |
 | Order History   | `{"type": "historicalOrders", "user": "0x..."}`                                |
 | Trade Fills     | `{"type": "userFills", "user": "0x...", "aggregateByTime": true}`              |
-| Funding History | `{"type": "userFunding", "user": "0x...", "startTime": <ts>, "endTime": <ts>}` |
+| Funding History | `{"type": "userFunding", "user": "0x...", "dex": "ALL_DEXS", "startTime": <ts>, "endTime": <ts>}` |
 | Sub-Accounts    | `{"type": "subAccounts", "user": "0x..."}`                                     |
 | Vault Details   | `{"type": "vaultDetails", "vaultAddress": "0x..."}`                            |
+
+> For user-state endpoints that accept `dex`, use `"dex": "ALL_DEXS"` before claiming no open orders, no positions, or no funding. HIP-3 markets are on separate DEXes; a plain call can miss them.
 
 ---
 
@@ -75,7 +77,7 @@ async function query<T>(body: object): Promise<T> {
 
 // Examples
 const mids = await query({ type: "allMids" });
-const positions = await query({ type: "clearinghouseState", user: "0x..." });
+const positions = await query({ type: "clearinghouseState", user: "0x...", dex: "ALL_DEXS" });
 const spotBal = await query({ type: "spotClearinghouseState", user: "0x..." });
 const dexes = await query({ type: "perpDexs" });
 ```

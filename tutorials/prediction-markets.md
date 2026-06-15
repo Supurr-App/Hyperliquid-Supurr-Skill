@@ -13,6 +13,7 @@ Supurr supports Hyperliquid binary outcome markets as spot-like markets. Agents 
 | Risk | No leverage, no funding, no liquidation. Max loss is premium paid. |
 | Expiry | Explain settlement/expiry risk. Do not add custom deadline automation unless product explicitly supports it. |
 | Strategy | Treat outcome as a market type. Grid, DCA, and custom strategies should not need outcome-specific hacks. |
+| Neutral grid | Use `supurr new orchestrator --kind prediction-yes-no-grid`, not one outcome grid in neutral mode. |
 
 ## Protocol Facts
 
@@ -142,6 +143,41 @@ Use the live bid/ask to choose range and order size. Thin books need smaller siz
     "cooldown_period_secs": 60
   }
 }
+```
+
+## Neutral YES/NO Orchestrator
+
+Use this for neutral prediction grids. It is two long grids under one bot identity:
+
+| Leg | Coin | Action |
+| --- | --- | --- |
+| YES | `#<10*outcome_id>` | Buy YES below the YES market, then sell YES TP after fill |
+| NO | `#<10*outcome_id+1>` | Buy NO below the NO market, then sell NO TP after fill |
+
+Rules:
+- Query `outcomeMeta`; never infer prediction markets from `meta` or `perpDexs`.
+- Agent/user supplies explicit YES and NO ranges from live `allMids` and both `l2Book`s.
+- If the user wants three active buy levels below current price, use `--levels 4`; active buys are `levels - 1`.
+- `--investment` is total group capital. Static v1 split is 50/50 across YES and NO.
+- Backtest first. Deploy only after explicit user confirmation.
+
+```bash
+supurr new orchestrator \
+  --kind prediction-yes-no-grid \
+  --asset BTC \
+  --outcome-id 7 \
+  --yes-start 0.235 \
+  --yes-end 0.265 \
+  --no-start 0.610 \
+  --no-end 0.650 \
+  --levels 4 \
+  --investment 120 \
+  --take-profit 10 \
+  --stop-loss 10 \
+  --output btc-yes-no-neutral
+
+supurr backtest -c btc-yes-no-neutral
+supurr deploy -c btc-yes-no-neutral
 ```
 
 ## Sizing

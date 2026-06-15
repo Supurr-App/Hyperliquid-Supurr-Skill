@@ -3,6 +3,28 @@ name: hyperliquid-supurr
 description: Build, backtest, paper trade, deploy, monitor, stop, and copy trading bots on Hyperliquid. Author custom strategies in Rust, or use built-in Grid, DCA, and Spot-Perp Arbitrage strategies across Native Perps, Spot markets (USDC/USDE/USDT0/USDH), HIP-3 sub-DEXes, and HIP-4 prediction markets.
 ---
 
+# Hard Rules
+
+## Hyperliquid-explorer
+
+- For Hyperliquid user-state endpoints that accept `dex`, always pass `"dex": "ALL_DEXS"` when fetching aggregate state across native perps and HIP-3/sub-DEXes.
+- This applies before claiming current open orders, positions/holdings, funding, or related live user state. HIP-3 markets live on other DEXes, so a plain call can miss real state.
+- Do not enumerate DEX names just to aggregate state. Use one `ALL_DEXS` request unless the user explicitly asks for one specific DEX.
+
+```bash
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"openOrders","user":"0x...","dex":"ALL_DEXS"}'
+```
+
+## Bot
+
+- After stopping a bot, do not assume all exchange orders were cancelled.
+- Always fetch live open orders from Hyperliquid once after stop, using `"dex": "ALL_DEXS"`.
+- If any bot-related orders remain live, manually cancel them and verify open orders again.
+
+---
+
 # Hyperliquid Supurr Skill — Complete Command Reference
 
 > **For LLMs**: This is the authoritative reference. Use exact syntax. Config files are in `~/.supurr/configs/`.
@@ -18,6 +40,7 @@ description: Build, backtest, paper trade, deploy, monitor, stop, and copy tradi
 | `supurr new grid`      | Generate grid strategy config   |
 | `supurr new arb`       | Generate spot-perp arb config   |
 | `supurr new dca`       | Generate DCA strategy config    |
+| `supurr new orchestrator` | Generate grouped strategy config |
 | `supurr configs`       | List saved configs              |
 | `supurr config <name>` | View config details             |
 | `supurr backtest`      | Run historical simulation       |
@@ -40,8 +63,10 @@ description: Build, backtest, paper trade, deploy, monitor, stop, and copy tradi
 | User asks about | Read before answering | Agent job |
 | --- | --- | --- |
 | Prediction markets, outcome markets, HIP-4 | [Prediction Markets](tutorials/prediction-markets.md) | Validate live `outcomeMeta`, keep prices inside `0..1`, use `USDH` spot balance, no leverage. |
+| Neutral prediction grid, YES/NO grid, neutral outcome board | This file, section 3d | Use `supurr new orchestrator`; model it as two long grids, not one neutral outcome grid. |
 | FOMO, opportunities, copyable bots, active bots | [Bot Discovery](references/bot-discovery.md) | Fetch live bot surfaces when relevant and suggest copy candidates only as risk-aware options. |
 | Missing funds, wallet connection, transfers, builder approval | [User Action Intents](references/user-action-intents.md) | Emit a machine-readable `user_action_required` object for frontend/Telegram rendering. |
+| Historical 1s candles, oracle archive, processed OHLCV data | This file, Supurr Oracle Candle API | Use Supurr Oracle presigned URLs; prefer processed candles over Hyperliquid Info API for historical backtests. |
 
 ---
 
@@ -96,12 +121,13 @@ supurr whoami    # Shows: Address + masked key
 
 ## 3. `supurr new <strategy>` — Config Generator
 
-Supports three strategies: `grid`, `arb`, `dca`.
+Supports four strategies: `grid`, `arb`, `dca`, `orchestrator`.
 
 ```bash
 supurr new grid [options]   # Grid trading
 supurr new arb [options]    # Spot-perp arbitrage
 supurr new dca [options]    # Dollar-cost averaging
+supurr new orchestrator [options] # Grouped strategy
 ```
 
 ---
@@ -262,6 +288,107 @@ supurr new dca --asset HYPE --type spot --quote USDC --trigger-price 25
 
 ---
 
+### 3d. `supurr new orchestrator` — Prediction YES/NO Neutral Grid
+
+Use this when the user asks for a neutral prediction grid, neutral outcome board, YES/NO grid, or market-neutral prediction bot.
+
+Model: two long grids under one orchestrator. The bot buys YES below the YES market and buys NO below the NO market.
+
+| Leg | Market | Range logic |
+| --- | --- | --- |
+| YES | outcome side `0` | Long YES below/around YES price |
+| NO | outcome side `1` | Long NO below/around NO price |
+
+Rules:
+- Use live `outcomeMeta`. Never infer HIP-4 availability from `meta`, `metaAndAssetCtxs`, or `perpDexs`.
+- Do not use single-market `supurr new grid --type outcome --mode neutral`.
+- Do not short outcome markets for neutral exposure. Use two long grids: long YES and long NO.
+- Do not call HIP-3 builder perps HIP-4. HIP-4/prediction availability comes only from `outcomeMeta`.
+- User/agent supplies explicit YES and NO ranges from live market context. CLI does not auto-calculate ranges in v1.
+- `--investment` is total group capital; Rust splits static 50/50.
+- Long grid active buys are `--levels - 1`; the top grid point is the first TP spacer.
+- Minimum total capital is `2 * active_buy_levels * 20 USDH`. Three active buys per YES/NO leg needs `--levels 4` and at least `120 USDH`.
+- Put `yes-end` and `no-end` below the current best bid when the goal is maker-only entries without immediate fills. If the user wants "three levels below current", use `--levels 4`.
+- Outcome labels may say Above/Below/Range. Do not infer side from wording; use `outcome_id`, YES side `0`, and NO side `1` from `outcomeMeta`.
+- Backtests are price-path simulations, not proof of live fill quality.
+- Backtest first. Deploy live only after explicit confirmation.
+
+Agent execution flow:
+
+| Step | Agent action | Hard check |
+| --- | --- | --- |
+| 1 | Detect neutral prediction intent | Use `supurr new orchestrator`, not single-leg grid |
+| 2 | Fetch live markets with `outcomeMeta` | Outcome must be live, tradable, and not pinned near `0` or `1` |
+| 3 | Map coins | YES coin is `#<10*outcome_id>`, NO coin is `#<10*outcome_id+1>` |
+| 4 | Fetch `allMids` and both `l2Book`s | Use book/mid to choose explicit YES and NO ranges |
+| 5 | Generate config | `--investment` is total group capital; static 50/50 split happens in Rust |
+| 6 | Backtest | Report PnL, fills, and open exposure; ask before deploy |
+| 7 | Deploy after confirmation | Verify open orders exist on both YES and NO coins |
+| 8 | Monitor live | YES fill should create sell YES TP; NO fill should create sell NO TP |
+| 9 | Stop | After stop, verify open outcome orders are gone |
+
+Live setup flow:
+
+```bash
+# 1. Fetch live prediction markets.
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"outcomeMeta"}'
+
+# 2. Fetch current outcome prices / books.
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"allMids"}'
+
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"l2Book","coin":"#70"}'
+
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"l2Book","coin":"#71"}'
+```
+
+Choose one live outcome where both YES and NO are tradable and not pinned near `0` or `1`. For outcome id `7`, YES coin is `#70`, NO coin is `#71`.
+
+```bash
+supurr new orchestrator \
+  --kind prediction-yes-no-grid \
+  --asset BTC \
+  --outcome-id 7 \
+  --yes-start 0.235 \
+  --yes-end 0.265 \
+  --no-start 0.610 \
+  --no-end 0.650 \
+  --levels 4 \
+  --investment 120 \
+  --take-profit 10 \
+  --stop-loss 10 \
+  --output btc-yes-no-neutral
+
+supurr backtest -c btc-yes-no-neutral
+
+# Deploy only after the user explicitly approves live trading.
+supurr deploy -c btc-yes-no-neutral
+supurr monitor
+```
+
+After deploy, verify both legs on Hyperliquid:
+
+```bash
+curl -sS -X POST https://api.hyperliquid.xyz/info \
+  -H 'content-type: application/json' \
+  --data '{"type":"openOrders","user":"0x...","dex":"ALL_DEXS"}'
+```
+
+Expected:
+- Before fills: buy orders on both `#<10*outcome_id>` and `#<10*outcome_id+1>`.
+- After a YES fill: a sell YES TP order appears.
+- After a NO fill: a sell NO TP order appears.
+- After `supurr stop`: no live orders remain for either outcome coin.
+
+---
+
 ## 4. `supurr configs` — List Saved Configs
 
 ```bash
@@ -334,6 +461,55 @@ supurr backtest -c btc-grid.json -s 2026-01-28 -e 2026-02-01 -o results.json
 > **Note**: Archive data available from 2026-01-28 onwards.
 >
 > **Important**: Backtests use Supurr's price archive (tick-level) or a user-provided prices file (`-p`). Do **not** use Hyperliquid Info API mids/candles for backtests; they don't provide tick-level historical data and will produce inaccurate results.
+
+### Supurr Oracle Candle API
+
+Base URL:
+
+```txt
+https://oracle.supurr.app
+```
+
+Health:
+
+```bash
+curl -sS https://oracle.supurr.app/health
+```
+
+Day file:
+
+```bash
+curl -sS 'https://oracle.supurr.app/v1/candles/day?date=2026-06-14'
+```
+
+Window, max 7 UTC days:
+
+```bash
+curl -sS 'https://oracle.supurr.app/v1/candles/window?end_date=2026-06-14&days=2'
+```
+
+Responses return presigned object URLs:
+
+```json
+{
+  "key": "global/candles/1s/date=2026-06-14/candles-processed.json.gz",
+  "url": "<presigned_download_url>",
+  "expires_in_secs": 3600
+}
+```
+
+Date APIs resolve in this order:
+
+```txt
+candles-processed.json.gz -> candles-live.json.gz -> 404
+```
+
+Use exact-key presign only when the caller already knows the bucket key:
+
+```bash
+curl -sS --get 'https://oracle.supurr.app/v1/presign' \
+  --data-urlencode 'key=global/candles/1s/date=2026-06-14/candles-processed.json.gz'
+```
 
 ---
 
