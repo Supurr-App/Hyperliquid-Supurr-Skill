@@ -156,7 +156,7 @@ main() {
         
         if [[ -z "$shell_rc" ]]; then
             warn "Could not detect shell config. Add this to your shell profile:"
-            echo -e "  ${CYAN}export PATH=\"\$HOME/.supurr/bin:\$PATH\"${NC}"
+            echo -e "  ${CYAN}export PATH=\"$INSTALL_DIR:\$PATH\"${NC}"
             return
         fi
         
@@ -166,8 +166,11 @@ main() {
             return
         fi
         
+        local profile_install_dir="${INSTALL_DIR/#$HOME/\$HOME}"
+        profile_install_dir="${profile_install_dir//\"/\\\"}"
+
         # Check if already added to rc file
-        if grep -q "\.supurr/bin" "$shell_rc" 2>/dev/null; then
+        if grep -qF "$INSTALL_DIR" "$shell_rc" 2>/dev/null || grep -qF "$profile_install_dir" "$shell_rc" 2>/dev/null; then
             success "PATH entry already in $shell_rc"
             return
         fi
@@ -175,9 +178,9 @@ main() {
         # Add to shell config
         local path_export
         if [[ "$shell_name" == "fish" ]]; then
-            path_export='set -gx PATH "$HOME/.supurr/bin" $PATH'
+            path_export="set -gx PATH \"$profile_install_dir\" \$PATH"
         else
-            path_export='export PATH="$HOME/.supurr/bin:$PATH"'
+            path_export="export PATH=\"$profile_install_dir:\$PATH\""
         fi
         
         echo "" >> "$shell_rc"

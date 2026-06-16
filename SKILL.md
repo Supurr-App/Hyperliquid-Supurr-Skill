@@ -49,7 +49,10 @@ curl -sS -X POST https://api.hyperliquid.xyz/info \
 | `supurr monitor`       | View active bots                |
 | `supurr history`       | View historical bot sessions    |
 | `supurr stop`          | Stop a running bot (signed)     |
-| `supurr prices`        | Debug price data                |
+| `supurr analytics`     | List analytics data commands    |
+| `supurr analytics prices` | Fetch/store Oracle OHLCV candles |
+| `supurr analytics funding-rates` | Fetch/store funding rates |
+| `supurr prices`        | Legacy alias for analytics prices |
 | `supurr update`        | Update CLI, skill, and bot source |
 | `supurr dev init`      | Clone/update bot source for dev |
 | `supurr dev build`     | Build bot from source           |
@@ -437,6 +440,7 @@ supurr backtest -c <config> [options]
 | `-p, --prices <file>` | Use local prices file                    |
 | `-o, --output <file>` | Save results to JSON                     |
 | `--no-cache`          | Disable price caching                    |
+| `--disassembly <mode>` | OHLC disassembly: `low-first`, `high-first`, or `random` |
 
 ### Examples
 
@@ -449,6 +453,13 @@ supurr backtest -c ~/.supurr/configs/btc-grid.json -s 2026-01-28 -e 2026-02-01
 
 # Save results
 supurr backtest -c btc-grid.json -s 2026-01-28 -e 2026-02-01 -o results.json
+
+# Choose OHLC path inside each 1s candle
+supurr backtest -c btc-grid.json -s 2026-06-14 -e 2026-06-14 --disassembly random
+
+# Reuse candles fetched by supurr analytics prices
+supurr analytics prices --market BTC --start 2026-06-14 --end 2026-06-14 --loc ./btc-candles.json
+supurr backtest -c btc-grid.json -p ./btc-candles.json --disassembly high-first
 ```
 
 ### Archive Data Availability
@@ -460,7 +471,7 @@ supurr backtest -c btc-grid.json -s 2026-01-28 -e 2026-02-01 -o results.json
 
 > **Note**: Archive data available from 2026-01-28 onwards.
 >
-> **Important**: Backtests use Supurr's price archive (tick-level) or a user-provided prices file (`-p`). Do **not** use Hyperliquid Info API mids/candles for backtests; they don't provide tick-level historical data and will produce inaccurate results.
+> **Important**: Backtests fetch Supurr Oracle 1s OHLCV and disassemble each candle into synthetic price points. `--prices` accepts either old `{ prices: [...] }` tick files or `supurr analytics prices` candle exports. Do **not** use Hyperliquid Info API mids/candles for backtests; they do not provide the same replay contract.
 
 ### Supurr Oracle Candle API
 
@@ -743,21 +754,48 @@ supurr stop --id 217     # Stop specific bot by ID
 
 ---
 
-## 11. `supurr prices` — Debug Price Data
+## 11. `supurr analytics` — Fetch Analytics Data
 
 ```bash
-supurr prices -a BTC                     # Fetch BTC prices (7 days)
-supurr prices -a hyna:BTC --dex hyna     # HIP-3 prices
-supurr prices -a HYPE -s 2026-01-28      # From specific date
+supurr analytics                         # List analytics commands
+supurr analytics prices --market BTC --start 2026-06-14
+supurr analytics prices --market BTC --start 20260614 --end 20260615 --duration 1M
+supurr analytics prices --market BTC --start 2026-06-14 --duration 1H --loc ./prices
+supurr analytics funding-rates --market BTC
+supurr analytics funding-rates --market BTC --start 2026-06-14 --end 2026-06-15
 ```
 
-| Option                 | Description                     |
-| ---------------------- | ------------------------------- |
-| `-a, --asset <symbol>` | **Required.** Asset symbol      |
-| `--dex <dex>`          | DEX name (default: hyperliquid) |
-| `-s, --start <date>`   | Start date                      |
-| `-e, --end <date>`     | End date                        |
-| `--no-cache`           | Disable caching                 |
+### `supurr analytics prices`
+
+Fetches Supurr Oracle 1s OHLCV candles, optionally aggregates them, and writes a `supurr.candles.v1` JSON file.
+
+| Option                  | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `-m, --market <symbol>` | Market symbol, e.g. `BTC`                        |
+| `-a, --asset <symbol>`  | Legacy alias for `--market`                      |
+| `--dex <dex>`           | DEX name, default `hyperliquid`                  |
+| `--asset-class <class>` | `perp`, `spot`, or `outcome`                     |
+| `-s, --start <date>`    | **Required.** `YYYY-MM-DD` or `YYYYMMDD`         |
+| `-e, --end <date>`      | End date, defaults to today                      |
+| `--duration <duration>` | Output duration: `1S`, `1M`, `5M`, `1H`, `1D`    |
+| `--loc, --location <path>` | Output directory or JSON file path            |
+| `--concurrency <count>` | Concurrent candle downloads, default `50`        |
+
+`supurr prices` remains as a legacy alias for this command.
+
+### `supurr analytics funding-rates`
+
+Fetches latest or historical funding-rate rows from Supurr Oracle.
+
+| Option                  | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `-m, --market <symbol>` | **Required.** Market symbol, e.g. `BTC`  |
+| `--dex <dex>`           | DEX name, default `hyperliquid`          |
+| `-s, --start <date>`    | Start date for history                   |
+| `-e, --end <date>`      | End date for history                     |
+| `--limit <count>`       | Max rows                                 |
+| `--order <order>`       | `asc` or `desc`, default `asc`           |
+| `--loc, --location <path>` | Output directory or JSON file path    |
 
 ---
 
