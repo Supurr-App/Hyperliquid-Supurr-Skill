@@ -53,6 +53,7 @@ curl -sS -X POST https://api.hyperliquid.xyz/info \
 | `supurr analytics prices` | Fetch/store Oracle OHLCV candles |
 | `supurr analytics funding-rates` | Fetch/store funding rates |
 | `supurr prices`        | Legacy alias for analytics prices |
+| `supurr skill install` | Install/update Supurr AI skill |
 | `supurr update`        | Update CLI, skill, and bot source |
 | `supurr dev init`      | Clone/update bot source for dev |
 | `supurr dev build`     | Build bot from source           |
@@ -799,7 +800,24 @@ Fetches latest or historical funding-rate rows from Supurr Oracle.
 
 ---
 
-## 12. `supurr update` — Update All Components
+## 12. `supurr skill install` — Install AI Skill
+
+```bash
+supurr skill install
+supurr skill update     # alias
+```
+
+Installs or updates the Supurr AI skill into supported agent skill directories.
+
+Equivalent served script:
+
+```bash
+curl -fsSL https://cli.supurr.app/skill-install | bash
+```
+
+---
+
+## 13. `supurr update` — Update All Components
 
 ```bash
 supurr update    # Updates CLI, AI skill, and bot source
@@ -810,7 +828,7 @@ Runs three independent steps (one failing won't block others):
 | Step | What | How |
 |---|---|---|
 | 1. CLI binary | Downloads latest from `cli.supurr.app` | Install script (same as `curl \| bash`) |
-| 2. AI skill | Pulls latest skill files | `npx skills add Supurr-App/Hyperliquid-Supurr-Skill` |
+| 2. AI skill | Installs/updates skill files | Same path as `supurr skill install` |
 | 3. Bot source | Git pull in `~/.supurr/bot-source/` | Only if previously cloned via `supurr dev init` |
 
 ---

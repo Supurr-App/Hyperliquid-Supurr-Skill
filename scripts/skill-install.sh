@@ -53,8 +53,8 @@ install_skill() {
 
   if [ -f "$temp_dir/SKILL.md" ]; then
     mkdir -p "$skills_dir/supurr"
-    cp "$temp_dir/SKILL.md" "$skills_dir/supurr/"
-    cp "$temp_dir/README.md" "$skills_dir/supurr/" 2>/dev/null || true
+    cp -R "$temp_dir"/. "$skills_dir/supurr/"
+    rm -rf "$skills_dir/supurr/.git"
     completed "$name → ${CYAN}$skills_dir/supurr${NC}"
     return 0
   fi
